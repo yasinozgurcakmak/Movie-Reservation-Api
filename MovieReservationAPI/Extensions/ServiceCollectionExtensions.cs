@@ -1,0 +1,76 @@
+using System.Text;
+using BusinessLayer.Concrete;
+using BusinessLayer.Interfaces;
+using BusinessLayer.Options;
+using BusinessLayer.Validators.Auth;
+using DataAccessLayer.Context;
+using DataAccessLayer.Repositories.Concrete;
+using DataAccessLayer.Repositories.Interfaces;
+using FluentValidation;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
+
+namespace MovieReservationAPI.Extensions;
+
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddDataAccess(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddBusiness(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
+        services.Configure<PasswordResetSettings>(configuration.GetSection(PasswordResetSettings.SectionName));
+
+        services.AddScoped<IAuthService, AuthManager>();
+        services.AddScoped<IUserService, UserManager>();
+        services.AddScoped<IPasswordResetService, PasswordResetManager>();
+
+        services.AddSingleton<ITokenService, TokenService>();
+        services.AddSingleton<IEmailService, SmtpEmailService>();
+
+        services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        var jwtSection = configuration.GetSection(JwtSettings.SectionName);
+        services.Configure<JwtSettings>(jwtSection);
+
+        var jwtSettings = jwtSection.Get<JwtSettings>()
+            ?? throw new InvalidOperationException("JWT settings are missing in configuration.");
+
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.MapInboundClaims = false;
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = jwtSettings.Issuer,
+                    ValidateAudience = true,
+                    ValidAudience = jwtSettings.Audience,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
+                    ValidateLifetime = true,
+                    NameClaimType = JwtRegisteredClaimNames.Sub,
+                    RoleClaimType = "role"
+                };
+            });
+
+        services.AddAuthorization();
+
+        return services;
+    }
+}
