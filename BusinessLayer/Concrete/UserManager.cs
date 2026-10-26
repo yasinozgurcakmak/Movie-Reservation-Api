@@ -2,7 +2,6 @@ using BusinessLayer.Exceptions;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Mappings;
 using DataAccessLayer.Repositories.Interfaces;
-using DataAccessLayer.Seed;
 using DtoLayer.Users;
 using EntityLayer.Entities;
 using EntityLayer.Enums;
@@ -12,6 +11,8 @@ namespace BusinessLayer.Concrete;
 
 public class UserManager : IUserService
 {
+    private const string MainAdminEmail = "admin@cinema.com";
+
     private readonly IUserRepository _userRepository;
     private readonly IValidator<UpdateProfileRequest> _updateProfileValidator;
     private readonly IValidator<UpdateUserRoleRequest> _updateRoleValidator;
@@ -64,7 +65,7 @@ public class UserManager : IUserService
         if (user.Id == currentUserId)
             throw new ForbiddenException("You cannot change your own role.");
 
-        if (user.Email == DbInitializer.AdminEmail)
+        if (user.Email == MainAdminEmail)
             throw new ForbiddenException("The role of the main admin account cannot be changed.");
 
         var newRole = Enum.Parse<UserRole>(request.Role, ignoreCase: true);

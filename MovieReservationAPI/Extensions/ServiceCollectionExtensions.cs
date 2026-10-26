@@ -22,6 +22,8 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+        services.AddScoped<IMovieRepository, MovieRepository>();
+        services.AddScoped<IGenreRepository, GenreRepository>();
 
         return services;
     }
@@ -34,6 +36,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthManager>();
         services.AddScoped<IUserService, UserManager>();
         services.AddScoped<IPasswordResetService, PasswordResetManager>();
+        services.AddScoped<IMovieService, MovieManager>();
+        services.AddScoped<IGenreService, GenreManager>();
 
         services.AddSingleton<ITokenService, TokenService>();
         services.AddSingleton<IEmailService, SmtpEmailService>();

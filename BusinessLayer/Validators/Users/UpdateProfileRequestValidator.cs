@@ -12,11 +12,7 @@ public class UpdateProfileRequestValidator : AbstractValidator<UpdateProfileRequ
 
         RuleFor(x => x.ProfilePictureUrl)
             .MaximumLength(500)
-            .Must(BeAValidHttpUrl).WithMessage("Profile picture URL must be a valid http or https URL.")
+            .HttpUrl()
             .When(x => !string.IsNullOrEmpty(x.ProfilePictureUrl));
     }
-
-    private static bool BeAValidHttpUrl(string? url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri)
-        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 }

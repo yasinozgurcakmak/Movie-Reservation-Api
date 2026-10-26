@@ -22,6 +22,119 @@ namespace DataAccessLayer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("EntityLayer.Entities.Genre", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Genres", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Aksiyon"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "Komedi"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Name = "Dram"
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Name = "Korku"
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Name = "Bilim Kurgu"
+                        },
+                        new
+                        {
+                            Id = 6,
+                            Name = "Animasyon"
+                        },
+                        new
+                        {
+                            Id = 7,
+                            Name = "Gerilim"
+                        },
+                        new
+                        {
+                            Id = 8,
+                            Name = "Romantik"
+                        });
+                });
+
+            modelBuilder.Entity("EntityLayer.Entities.Movie", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("DurationMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("PosterUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateOnly>("ReleaseDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Movies", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Movies_DurationMinutes", "\"DurationMinutes\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("EntityLayer.Entities.PasswordResetToken", b =>
                 {
                     b.Property<int>("Id")
@@ -105,6 +218,21 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("MovieGenres", b =>
+                {
+                    b.Property<int>("GenreId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MovieId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("GenreId", "MovieId");
+
+                    b.HasIndex("MovieId");
+
+                    b.ToTable("MovieGenres");
+                });
+
             modelBuilder.Entity("EntityLayer.Entities.PasswordResetToken", b =>
                 {
                     b.HasOne("EntityLayer.Entities.User", "User")
@@ -114,6 +242,21 @@ namespace DataAccessLayer.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MovieGenres", b =>
+                {
+                    b.HasOne("EntityLayer.Entities.Genre", null)
+                        .WithMany()
+                        .HasForeignKey("GenreId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("EntityLayer.Entities.Movie", null)
+                        .WithMany()
+                        .HasForeignKey("MovieId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
