@@ -36,6 +36,15 @@ public class ShowtimesController : ControllerBase
         return Ok(showtime);
     }
 
+    [HttpGet("{id:int}/seats")]
+    [ProducesResponseType<SeatMapResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSeatMap(int id)
+    {
+        var seatMap = await _showtimeService.GetSeatMapAsync(id);
+        return Ok(seatMap);
+    }
+
     [HttpPost]
     [Authorize(Roles = ContentManagerRoles)]
     [ProducesResponseType<ShowtimeResponse>(StatusCodes.Status201Created)]

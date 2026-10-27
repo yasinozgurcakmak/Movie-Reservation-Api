@@ -68,6 +68,26 @@ public class ShowtimeManager : IShowtimeService
         return showtime.ToResponse();
     }
 
+    public async Task<SeatMapResponse> GetSeatMapAsync(int id)
+    {
+        var showtime = await _showtimeRepository.GetByIdAsync(id)
+            ?? throw new NotFoundException($"Showtime with id {id} was not found.");
+        var hall = showtime.Hall;
+
+        var rows = Enumerable.Range(0, hall.RowCount)
+            .Select(rowIndex =>
+            {
+                var row = ((char)('A' + rowIndex)).ToString();
+                var seats = Enumerable.Range(1, hall.SeatsPerRow)
+                    .Select(number => new SeatResponse($"{row}{number}", IsAvailable: true))
+                    .ToList();
+                return new SeatRowResponse(row, seats);
+            })
+            .ToList();
+
+        return new SeatMapResponse(showtime.Id, hall.Id, hall.Name, rows);
+    }
+
     public async Task<ShowtimeResponse> CreateAsync(ShowtimeRequest request)
     {
         await _showtimeValidator.ValidateAndThrowAsync(request);
