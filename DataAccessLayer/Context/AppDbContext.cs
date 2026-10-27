@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Movie> Movies => Set<Movie>();
     public DbSet<Genre> Genres => Set<Genre>();
+    public DbSet<Hall> Halls => Set<Hall>();
+    public DbSet<Showtime> Showtimes => Set<Showtime>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -105,4 +105,3 @@ Always return semantically correct status codes:
   5. `MovieReservationAPI`: Thin controllers, Global `IExceptionHandler`, JWT configuration, DI extensions, and Swagger setup.
 - **PostgreSQL Conventions:** Always use `DateTimeOffset` or UTC `DateTime` (`timestamp with time zone`). Configure constraints, indexes, and relationships explicitly using Fluent API (`IEntityTypeConfiguration`), never data annotations on entities.
 - **Deferred Features:** Do NOT add Redis caching or API Versioning unless explicitly asked in the current step's prompt.
-

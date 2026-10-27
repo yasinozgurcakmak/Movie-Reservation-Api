@@ -24,6 +24,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
         services.AddScoped<IMovieRepository, MovieRepository>();
         services.AddScoped<IGenreRepository, GenreRepository>();
+        services.AddScoped<IHallRepository, HallRepository>();
+        services.AddScoped<IShowtimeRepository, ShowtimeRepository>();
 
         return services;
     }
@@ -32,12 +34,15 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<EmailSettings>(configuration.GetSection(EmailSettings.SectionName));
         services.Configure<PasswordResetSettings>(configuration.GetSection(PasswordResetSettings.SectionName));
+        services.Configure<CinemaSettings>(configuration.GetSection(CinemaSettings.SectionName));
 
         services.AddScoped<IAuthService, AuthManager>();
         services.AddScoped<IUserService, UserManager>();
         services.AddScoped<IPasswordResetService, PasswordResetManager>();
         services.AddScoped<IMovieService, MovieManager>();
         services.AddScoped<IGenreService, GenreManager>();
+        services.AddScoped<IHallService, HallManager>();
+        services.AddScoped<IShowtimeService, ShowtimeManager>();
 
         services.AddSingleton<ITokenService, TokenService>();
         services.AddSingleton<IEmailService, SmtpEmailService>();

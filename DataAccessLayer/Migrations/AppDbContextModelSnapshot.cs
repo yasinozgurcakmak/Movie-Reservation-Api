@@ -85,6 +85,38 @@ namespace DataAccessLayer.Migrations
                         });
                 });
 
+            modelBuilder.Entity("EntityLayer.Entities.Hall", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SeatsPerRow")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Halls", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Halls_RowCount", "\"RowCount\" BETWEEN 1 AND 26");
+
+                            t.HasCheckConstraint("CK_Halls_SeatsPerRow", "\"SeatsPerRow\" BETWEEN 1 AND 50");
+                        });
+                });
+
             modelBuilder.Entity("EntityLayer.Entities.Movie", b =>
                 {
                     b.Property<int>("Id")
@@ -169,6 +201,51 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("PasswordResetTokens", (string)null);
                 });
 
+            modelBuilder.Entity("EntityLayer.Entities.Showtime", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTimeOffset>("EndTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("HallId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MovieId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("StartTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("TicketPrice")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MovieId");
+
+                    b.HasIndex("StartTime");
+
+                    b.HasIndex("HallId", "StartTime");
+
+                    b.ToTable("Showtimes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Showtimes_EndTime", "\"EndTime\" > \"StartTime\"");
+
+                            t.HasCheckConstraint("CK_Showtimes_TicketPrice", "\"TicketPrice\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("EntityLayer.Entities.User", b =>
                 {
                     b.Property<int>("Id")
@@ -242,6 +319,25 @@ namespace DataAccessLayer.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("EntityLayer.Entities.Showtime", b =>
+                {
+                    b.HasOne("EntityLayer.Entities.Hall", "Hall")
+                        .WithMany()
+                        .HasForeignKey("HallId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("EntityLayer.Entities.Movie", "Movie")
+                        .WithMany()
+                        .HasForeignKey("MovieId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Hall");
+
+                    b.Navigation("Movie");
                 });
 
             modelBuilder.Entity("MovieGenres", b =>
