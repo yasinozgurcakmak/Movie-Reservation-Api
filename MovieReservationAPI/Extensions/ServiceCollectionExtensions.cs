@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGenreRepository, GenreRepository>();
         services.AddScoped<IHallRepository, HallRepository>();
         services.AddScoped<IShowtimeRepository, ShowtimeRepository>();
+        services.AddScoped<IReservationRepository, ReservationRepository>();
 
         return services;
     }
@@ -43,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGenreService, GenreManager>();
         services.AddScoped<IHallService, HallManager>();
         services.AddScoped<IShowtimeService, ShowtimeManager>();
+        services.AddScoped<IReservationService, ReservationManager>();
 
         services.AddSingleton<ITokenService, TokenService>();
         services.AddSingleton<IEmailService, SmtpEmailService>();

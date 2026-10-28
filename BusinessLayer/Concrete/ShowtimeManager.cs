@@ -1,3 +1,4 @@
+using BusinessLayer.Common;
 using BusinessLayer.Exceptions;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Mappings;
@@ -15,6 +16,7 @@ public class ShowtimeManager : IShowtimeService
     private readonly IShowtimeRepository _showtimeRepository;
     private readonly IMovieRepository _movieRepository;
     private readonly IHallRepository _hallRepository;
+    private readonly IReservationRepository _reservationRepository;
     private readonly IValidator<ShowtimeRequest> _showtimeValidator;
     private readonly IValidator<ShowtimeQueryParameters> _queryValidator;
     private readonly TimeZoneInfo _cinemaTimeZone;
@@ -23,6 +25,7 @@ public class ShowtimeManager : IShowtimeService
         IShowtimeRepository showtimeRepository,
         IMovieRepository movieRepository,
         IHallRepository hallRepository,
+        IReservationRepository reservationRepository,
         IValidator<ShowtimeRequest> showtimeValidator,
         IValidator<ShowtimeQueryParameters> queryValidator,
         IOptions<CinemaSettings> options)
@@ -30,6 +33,7 @@ public class ShowtimeManager : IShowtimeService
         _showtimeRepository = showtimeRepository;
         _movieRepository = movieRepository;
         _hallRepository = hallRepository;
+        _reservationRepository = reservationRepository;
         _showtimeValidator = showtimeValidator;
         _queryValidator = queryValidator;
         _cinemaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZoneId);
@@ -73,13 +77,15 @@ public class ShowtimeManager : IShowtimeService
         var showtime = await _showtimeRepository.GetByIdAsync(id)
             ?? throw new NotFoundException($"Showtime with id {id} was not found.");
         var hall = showtime.Hall;
+        var reservedSeats = (await _reservationRepository.GetReservedSeatCodesAsync(id)).ToHashSet();
 
         var rows = Enumerable.Range(0, hall.RowCount)
             .Select(rowIndex =>
             {
-                var row = ((char)('A' + rowIndex)).ToString();
+                var row = SeatLayout.ToRowLabel(rowIndex);
                 var seats = Enumerable.Range(1, hall.SeatsPerRow)
-                    .Select(number => new SeatResponse($"{row}{number}", IsAvailable: true))
+                    .Select(number => SeatLayout.ToSeatCode(row, number))
+                    .Select(code => new SeatResponse(code, IsAvailable: !reservedSeats.Contains(code)))
                     .ToList();
                 return new SeatRowResponse(row, seats);
             })

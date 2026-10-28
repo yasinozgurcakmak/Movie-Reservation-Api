@@ -3,6 +3,8 @@ using BusinessLayer.Exceptions;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace MovieReservationAPI.ExceptionHandling;
 
@@ -27,6 +29,8 @@ public class GlobalExceptionHandler : IExceptionHandler
             ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
             NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
+            DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } }
+                => (StatusCodes.Status409Conflict, "Conflict"),
             _ => (StatusCodes.Status500InternalServerError, "Internal Server Error")
         };
 
@@ -62,6 +66,9 @@ public class GlobalExceptionHandler : IExceptionHandler
 
         if (statusCode == StatusCodes.Status500InternalServerError)
             return _environment.IsDevelopment() ? exception.Message : "An unexpected error occurred.";
+
+        if (exception is DbUpdateException)
+            return "The request conflicts with data that was saved at the same time. Please refresh and try again.";
 
         return exception.Message;
     }
