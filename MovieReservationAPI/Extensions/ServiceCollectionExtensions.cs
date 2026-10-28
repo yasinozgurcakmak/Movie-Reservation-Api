@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
 
 namespace MovieReservationAPI.Extensions;
 
@@ -19,6 +20,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDataAccess(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.ConfigurationOptions = ConfigurationOptions.Parse(configuration.GetConnectionString("Redis")!);
+            options.ConfigurationOptions.BacklogPolicy = BacklogPolicy.FailFast;
+            options.InstanceName = "MovieReservation:";
+        });
 
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
@@ -27,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IHallRepository, HallRepository>();
         services.AddScoped<IShowtimeRepository, ShowtimeRepository>();
         services.AddScoped<IReservationRepository, ReservationRepository>();
+        services.AddScoped<IReportRepository, ReportRepository>();
 
         return services;
     }
@@ -45,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IHallService, HallManager>();
         services.AddScoped<IShowtimeService, ShowtimeManager>();
         services.AddScoped<IReservationService, ReservationManager>();
+        services.AddScoped<IReportService, ReportManager>();
 
         services.AddSingleton<ITokenService, TokenService>();
         services.AddSingleton<IEmailService, SmtpEmailService>();

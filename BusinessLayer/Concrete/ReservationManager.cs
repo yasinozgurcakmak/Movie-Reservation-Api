@@ -3,6 +3,7 @@ using BusinessLayer.Exceptions;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Mappings;
 using DataAccessLayer.Repositories.Interfaces;
+using DtoLayer.Common;
 using DtoLayer.Reservations;
 using EntityLayer.Entities;
 using EntityLayer.Enums;
@@ -16,17 +17,37 @@ public class ReservationManager : IReservationService
     private readonly IShowtimeRepository _showtimeRepository;
     private readonly IValidator<ReservationRequest> _reservationValidator;
     private readonly IValidator<ReservationStatusRequest> _statusValidator;
+    private readonly IValidator<ReservationQueryParameters> _queryValidator;
 
     public ReservationManager(
         IReservationRepository reservationRepository,
         IShowtimeRepository showtimeRepository,
         IValidator<ReservationRequest> reservationValidator,
-        IValidator<ReservationStatusRequest> statusValidator)
+        IValidator<ReservationStatusRequest> statusValidator,
+        IValidator<ReservationQueryParameters> queryValidator)
     {
         _reservationRepository = reservationRepository;
         _showtimeRepository = showtimeRepository;
         _reservationValidator = reservationValidator;
         _statusValidator = statusValidator;
+        _queryValidator = queryValidator;
+    }
+
+    public async Task<PagedResponse<AdminReservationResponse>> GetPagedAsync(ReservationQueryParameters query)
+    {
+        await _queryValidator.ValidateAndThrowAsync(query);
+
+        ReservationStatus? status = query.Status is null ? null : Enum.Parse<ReservationStatus>(query.Status, ignoreCase: true);
+        var (reservations, totalCount) = await _reservationRepository.GetPagedAsync(
+            status, query.ShowtimeId, query.UserId, query.Email, query.Page, query.PageSize);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
+
+        return new PagedResponse<AdminReservationResponse>(
+            reservations.Select(r => r.ToAdminResponse()).ToList(),
+            query.Page,
+            query.PageSize,
+            totalCount,
+            totalPages);
     }
 
     public async Task<List<ReservationResponse>> GetByUserIdAsync(int userId)

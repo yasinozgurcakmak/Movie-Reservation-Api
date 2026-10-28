@@ -53,6 +53,10 @@ public class HallManager : IHallService
         var name = request.Name.Trim();
         await EnsureNameIsUniqueAsync(name, id);
 
+        var isResized = hall.RowCount != request.RowCount || hall.SeatsPerRow != request.SeatsPerRow;
+        if (isResized && await _hallRepository.CountShowtimesAsync(id) > 0)
+            throw new ConflictException($"Hall with id {id} has showtimes, so its size cannot be changed. Create a new hall instead.");
+
         hall.Name = name;
         hall.RowCount = request.RowCount;
         hall.SeatsPerRow = request.SeatsPerRow;
