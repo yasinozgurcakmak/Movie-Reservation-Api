@@ -1,3 +1,4 @@
+using BusinessLayer.Common;
 using BusinessLayer.Exceptions;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Mappings;
@@ -12,18 +13,21 @@ public class GenreManager : IGenreService
 {
     private readonly IGenreRepository _genreRepository;
     private readonly IValidator<GenreRequest> _genreValidator;
+    private readonly CatalogCache _catalogCache;
 
-    public GenreManager(IGenreRepository genreRepository, IValidator<GenreRequest> genreValidator)
+    public GenreManager(IGenreRepository genreRepository, IValidator<GenreRequest> genreValidator, CatalogCache catalogCache)
     {
         _genreRepository = genreRepository;
         _genreValidator = genreValidator;
+        _catalogCache = catalogCache;
     }
 
-    public async Task<List<GenreResponse>> GetAllAsync()
-    {
-        var genres = await _genreRepository.GetAllAsync();
-        return genres.Select(g => g.ToResponse()).ToList();
-    }
+    public Task<List<GenreResponse>> GetAllAsync() =>
+        _catalogCache.GetOrCreateAsync("genres", async () =>
+        {
+            var genres = await _genreRepository.GetAllAsync();
+            return genres.Select(g => g.ToResponse()).ToList();
+        });
 
     public async Task<GenreResponse> GetByIdAsync(int id)
     {
@@ -41,6 +45,7 @@ public class GenreManager : IGenreService
         var genre = new Genre { Name = name };
         await _genreRepository.AddAsync(genre);
         await _genreRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
 
         return genre.ToResponse();
     }
@@ -55,6 +60,7 @@ public class GenreManager : IGenreService
 
         genre.Name = name;
         await _genreRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
 
         return genre.ToResponse();
     }
@@ -69,6 +75,7 @@ public class GenreManager : IGenreService
 
         _genreRepository.Remove(genre);
         await _genreRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
     }
 
     private async Task EnsureNameIsUniqueAsync(string name, int? excludeId = null)

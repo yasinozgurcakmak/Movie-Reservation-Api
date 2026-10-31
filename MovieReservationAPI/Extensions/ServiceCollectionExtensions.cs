@@ -1,4 +1,5 @@
 using System.Text;
+using BusinessLayer.Common;
 using BusinessLayer.Concrete;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Options;
@@ -55,6 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReservationService, ReservationManager>();
         services.AddScoped<IReportService, ReportManager>();
 
+        services.AddSingleton<CatalogCache>();
         services.AddSingleton<ITokenService, TokenService>();
         services.AddSingleton<IEmailService, SmtpEmailService>();
 

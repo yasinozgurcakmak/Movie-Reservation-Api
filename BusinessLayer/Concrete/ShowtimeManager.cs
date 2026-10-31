@@ -19,6 +19,7 @@ public class ShowtimeManager : IShowtimeService
     private readonly IReservationRepository _reservationRepository;
     private readonly IValidator<ShowtimeRequest> _showtimeValidator;
     private readonly IValidator<ShowtimeQueryParameters> _queryValidator;
+    private readonly CatalogCache _catalogCache;
     private readonly TimeZoneInfo _cinemaTimeZone;
 
     public ShowtimeManager(
@@ -28,6 +29,7 @@ public class ShowtimeManager : IShowtimeService
         IReservationRepository reservationRepository,
         IValidator<ShowtimeRequest> showtimeValidator,
         IValidator<ShowtimeQueryParameters> queryValidator,
+        CatalogCache catalogCache,
         IOptions<CinemaSettings> options)
     {
         _showtimeRepository = showtimeRepository;
@@ -36,6 +38,7 @@ public class ShowtimeManager : IShowtimeService
         _reservationRepository = reservationRepository;
         _showtimeValidator = showtimeValidator;
         _queryValidator = queryValidator;
+        _catalogCache = catalogCache;
         _cinemaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZoneId);
     }
 
@@ -43,7 +46,13 @@ public class ShowtimeManager : IShowtimeService
     {
         await _queryValidator.ValidateAndThrowAsync(query);
 
-        var localDayStart = query.Date!.Value.ToDateTime(TimeOnly.MinValue);
+        var date = query.Date!.Value;
+        return await _catalogCache.GetOrCreateAsync($"showtimes:date:{date:yyyy-MM-dd}", () => BuildDailyListingAsync(date));
+    }
+
+    private async Task<List<MovieShowtimesResponse>> BuildDailyListingAsync(DateOnly date)
+    {
+        var localDayStart = date.ToDateTime(TimeOnly.MinValue);
         var from = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localDayStart, _cinemaTimeZone));
         var to = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localDayStart.AddDays(1), _cinemaTimeZone));
 
@@ -121,6 +130,8 @@ public class ShowtimeManager : IShowtimeService
 
         await _showtimeRepository.AddAsync(showtime);
         await _showtimeRepository.SaveChangesAsync();
+
+        await _catalogCache.InvalidateAsync();
 
         return showtime.ToResponse();
     }

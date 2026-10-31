@@ -1,3 +1,4 @@
+using BusinessLayer.Common;
 using BusinessLayer.Exceptions;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Mappings;
@@ -12,18 +13,21 @@ public class HallManager : IHallService
 {
     private readonly IHallRepository _hallRepository;
     private readonly IValidator<HallRequest> _hallValidator;
+    private readonly CatalogCache _catalogCache;
 
-    public HallManager(IHallRepository hallRepository, IValidator<HallRequest> hallValidator)
+    public HallManager(IHallRepository hallRepository, IValidator<HallRequest> hallValidator, CatalogCache catalogCache)
     {
         _hallRepository = hallRepository;
         _hallValidator = hallValidator;
+        _catalogCache = catalogCache;
     }
 
-    public async Task<List<HallResponse>> GetAllAsync()
-    {
-        var halls = await _hallRepository.GetAllAsync();
-        return halls.Select(h => h.ToResponse()).ToList();
-    }
+    public Task<List<HallResponse>> GetAllAsync() =>
+        _catalogCache.GetOrCreateAsync("halls", async () =>
+        {
+            var halls = await _hallRepository.GetAllAsync();
+            return halls.Select(h => h.ToResponse()).ToList();
+        });
 
     public async Task<HallResponse> GetByIdAsync(int id)
     {
@@ -41,6 +45,7 @@ public class HallManager : IHallService
         var hall = new Hall { Name = name, RowCount = request.RowCount, SeatsPerRow = request.SeatsPerRow };
         await _hallRepository.AddAsync(hall);
         await _hallRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
 
         return hall.ToResponse();
     }
@@ -61,6 +66,7 @@ public class HallManager : IHallService
         hall.RowCount = request.RowCount;
         hall.SeatsPerRow = request.SeatsPerRow;
         await _hallRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
 
         return hall.ToResponse();
     }
@@ -75,6 +81,7 @@ public class HallManager : IHallService
 
         _hallRepository.Remove(hall);
         await _hallRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
     }
 
     private async Task EnsureNameIsUniqueAsync(string name, int? excludeId = null)

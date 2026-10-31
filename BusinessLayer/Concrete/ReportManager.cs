@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
+using BusinessLayer.Common;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Options;
 using DataAccessLayer.Models;
@@ -50,7 +50,7 @@ public class ReportManager : IReportService
         await _analyticsValidator.ValidateAndThrowAsync(query);
 
         var cacheKey = $"reports:analytics:{query.From:yyyy-MM-dd}:{query.To:yyyy-MM-dd}:{query.Top}";
-        return await GetOrCreateCachedAsync(cacheKey, () => BuildAnalyticsAsync(query));
+        return await _cache.GetOrCreateAsync(cacheKey, CacheDuration, () => BuildAnalyticsAsync(query), _logger);
     }
 
     public async Task<byte[]> GetAnalyticsCsvAsync(AnalyticsQueryParameters query)
@@ -83,7 +83,7 @@ public class ReportManager : IReportService
 
         var interval = query.Interval.ToLowerInvariant();
         var cacheKey = $"reports:sales:{query.From:yyyy-MM-dd}:{query.To:yyyy-MM-dd}:{interval}";
-        return await GetOrCreateCachedAsync(cacheKey, () => BuildSalesAsync(query.From!.Value, query.To!.Value, interval));
+        return await _cache.GetOrCreateAsync(cacheKey, CacheDuration, () => BuildSalesAsync(query.From!.Value, query.To!.Value, interval), _logger);
     }
 
     private async Task<AnalyticsResponse> BuildAnalyticsAsync(AnalyticsQueryParameters query)
@@ -203,33 +203,6 @@ public class ReportManager : IReportService
             sales.Sum(s => s.SeatCount),
             sales.Sum(s => s.TotalAmount),
             points);
-    }
-
-    private async Task<T> GetOrCreateCachedAsync<T>(string key, Func<Task<T>> factory)
-    {
-        try
-        {
-            var cached = await _cache.GetStringAsync(key);
-            if (cached is not null) return JsonSerializer.Deserialize<T>(cached)!;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Report cache read failed for {CacheKey}", key);
-        }
-
-        var value = await factory();
-
-        try
-        {
-            await _cache.SetStringAsync(key, JsonSerializer.Serialize(value),
-                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Report cache write failed for {CacheKey}", key);
-        }
-
-        return value;
     }
 
     private static SegmentAnalyticsResponse ToSegment(int? id, string name, IEnumerable<ShowtimeSalesSummary> showtimes)

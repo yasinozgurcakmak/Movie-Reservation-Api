@@ -1,3 +1,4 @@
+using BusinessLayer.Common;
 using BusinessLayer.Exceptions;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Mappings;
@@ -16,25 +17,34 @@ public class MovieManager : IMovieService
     private readonly IValidator<MovieRequest> _movieValidator;
     private readonly IValidator<MovieQueryParameters> _queryValidator;
     private readonly IValidator<MovieStatusRequest> _statusValidator;
+    private readonly CatalogCache _catalogCache;
 
     public MovieManager(
         IMovieRepository movieRepository,
         IGenreRepository genreRepository,
         IValidator<MovieRequest> movieValidator,
         IValidator<MovieQueryParameters> queryValidator,
-        IValidator<MovieStatusRequest> statusValidator)
+        IValidator<MovieStatusRequest> statusValidator,
+        CatalogCache catalogCache)
     {
         _movieRepository = movieRepository;
         _genreRepository = genreRepository;
         _movieValidator = movieValidator;
         _queryValidator = queryValidator;
         _statusValidator = statusValidator;
+        _catalogCache = catalogCache;
     }
 
     public async Task<PagedResponse<MovieResponse>> GetPagedAsync(MovieQueryParameters query)
     {
         await _queryValidator.ValidateAndThrowAsync(query);
 
+        var cacheKey = $"movies:genre:{query.GenreId?.ToString() ?? "all"}:page:{query.Page}:size:{query.PageSize}";
+        return await _catalogCache.GetOrCreateAsync(cacheKey, () => BuildPageAsync(query));
+    }
+
+    private async Task<PagedResponse<MovieResponse>> BuildPageAsync(MovieQueryParameters query)
+    {
         var (movies, totalCount) = await _movieRepository.GetPagedAsync(query.GenreId, query.Page, query.PageSize);
         var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
 
@@ -61,6 +71,7 @@ public class MovieManager : IMovieService
 
         await _movieRepository.AddAsync(movie);
         await _movieRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
 
         return movie.ToResponse();
     }
@@ -73,6 +84,7 @@ public class MovieManager : IMovieService
         await ApplyRequestAsync(movie, request);
 
         await _movieRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
 
         return movie.ToResponse();
     }
@@ -83,6 +95,7 @@ public class MovieManager : IMovieService
         movie.IsDeleted = true;
         movie.DeletedAt = DateTimeOffset.UtcNow;
         await _movieRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
     }
 
     public async Task<MovieResponse> UpdateStatusAsync(int id, MovieStatusRequest request)
@@ -99,6 +112,7 @@ public class MovieManager : IMovieService
         movie.IsDeleted = isDeleted;
         movie.DeletedAt = isDeleted ? DateTimeOffset.UtcNow : null;
         await _movieRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
 
         return movie.ToResponse();
     }
