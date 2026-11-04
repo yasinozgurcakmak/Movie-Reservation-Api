@@ -14,8 +14,10 @@ public class HallRepository : IHallRepository
         _context = context;
     }
 
-    public Task<List<Hall>> GetAllAsync() => _context.Halls.AsNoTracking().OrderBy(h => h.Name).ToListAsync();
-    public Task<Hall?> GetByIdAsync(int id) => _context.Halls.FirstOrDefaultAsync(h => h.Id == id);
+    public Task<List<Hall>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        _context.Halls.AsNoTracking().OrderBy(h => h.Name).ToListAsync(cancellationToken);
+    public Task<Hall?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
+        _context.Halls.FirstOrDefaultAsync(h => h.Id == id, cancellationToken);
     public Task<bool> NameExistsAsync(string name, int? excludeId = null) =>
         _context.Halls.AnyAsync(h => h.Name.ToLower() == name.ToLower() && h.Id != excludeId);
     public Task<int> CountShowtimesAsync(int id) =>

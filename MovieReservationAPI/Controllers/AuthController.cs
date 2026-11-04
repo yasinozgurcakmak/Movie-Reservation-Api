@@ -3,20 +3,47 @@ using DtoLayer.Auth;
 using DtoLayer.Common;
 using DtoLayer.Users;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using MovieReservationAPI.RateLimiting;
 
 namespace MovieReservationAPI.Controllers;
 
 [ApiController]
 [Route("api/auth")]
+[EnableRateLimiting(RateLimitPolicies.Auth)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests)]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
     private readonly IPasswordResetService _passwordResetService;
+    private readonly IEmailVerificationService _emailVerificationService;
 
-    public AuthController(IAuthService authService, IPasswordResetService passwordResetService)
+    public AuthController(
+        IAuthService authService,
+        IPasswordResetService passwordResetService,
+        IEmailVerificationService emailVerificationService)
     {
         _authService = authService;
         _passwordResetService = passwordResetService;
+        _emailVerificationService = emailVerificationService;
+    }
+
+    [HttpPost("verify-email")]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> VerifyEmail(VerifyEmailRequest request)
+    {
+        await _emailVerificationService.VerifyEmailAsync(request);
+        return Ok(new MessageResponse("Your email address has been verified."));
+    }
+
+    [HttpPost("resend-verification")]
+    [ProducesResponseType<MessageResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResendVerification(ResendVerificationRequest request)
+    {
+        await _emailVerificationService.ResendVerificationEmailAsync(request);
+        return Ok(new MessageResponse("If an unverified account with that email exists, a verification link has been sent."));
     }
 
     [HttpPost("forgot-password")]

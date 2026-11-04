@@ -22,18 +22,18 @@ public class MoviesController : ControllerBase
     [HttpGet]
     [ProducesResponseType<PagedResponse<MovieResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetAll([FromQuery] MovieQueryParameters query)
+    public async Task<IActionResult> GetAll([FromQuery] MovieQueryParameters query, CancellationToken cancellationToken)
     {
-        var movies = await _movieService.GetPagedAsync(query);
+        var movies = await _movieService.GetPagedAsync(query, cancellationToken);
         return Ok(movies);
     }
 
     [HttpGet("{id:int}")]
     [ProducesResponseType<MovieResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {
-        var movie = await _movieService.GetByIdAsync(id);
+        var movie = await _movieService.GetByIdAsync(id, cancellationToken);
         return Ok(movie);
     }
 
@@ -56,6 +56,7 @@ public class MoviesController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(int id, MovieRequest request)
     {
         var movie = await _movieService.UpdateAsync(id, request);
@@ -68,6 +69,7 @@ public class MoviesController : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(int id)
     {
         await _movieService.DeleteAsync(id);

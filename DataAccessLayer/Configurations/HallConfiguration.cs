@@ -18,5 +18,6 @@ public class HallConfiguration : IEntityTypeConfiguration<Hall>
         builder.HasIndex(h => h.Name).IsUnique();
         builder.Property(h => h.RowCount).IsRequired();
         builder.Property(h => h.SeatsPerRow).IsRequired();
+        builder.Property(h => h.Version).IsRowVersion();
     }
 }

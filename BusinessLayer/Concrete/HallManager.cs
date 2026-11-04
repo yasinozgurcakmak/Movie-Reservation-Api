@@ -22,16 +22,16 @@ public class HallManager : IHallService
         _catalogCache = catalogCache;
     }
 
-    public Task<List<HallResponse>> GetAllAsync() =>
+    public Task<List<HallResponse>> GetAllAsync(CancellationToken cancellationToken = default) =>
         _catalogCache.GetOrCreateAsync("halls", async () =>
         {
-            var halls = await _hallRepository.GetAllAsync();
+            var halls = await _hallRepository.GetAllAsync(cancellationToken);
             return halls.Select(h => h.ToResponse()).ToList();
         });
 
-    public async Task<HallResponse> GetByIdAsync(int id)
+    public async Task<HallResponse> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        var hall = await GetExistingHallAsync(id);
+        var hall = await GetExistingHallAsync(id, cancellationToken);
         return hall.ToResponse();
     }
 
@@ -55,6 +55,9 @@ public class HallManager : IHallService
         await _hallValidator.ValidateAndThrowAsync(request);
 
         var hall = await GetExistingHallAsync(id);
+        if (request.Version is not null && request.Version != hall.Version)
+            throw new ConflictException($"Hall with id {id} was modified by someone else. Reload it and try again.");
+
         var name = request.Name.Trim();
         await EnsureNameIsUniqueAsync(name, id);
 
@@ -90,7 +93,7 @@ public class HallManager : IHallService
             throw new ConflictException($"A hall with name '{name}' already exists.");
     }
 
-    private async Task<Hall> GetExistingHallAsync(int id) =>
-        await _hallRepository.GetByIdAsync(id)
+    private async Task<Hall> GetExistingHallAsync(int id, CancellationToken cancellationToken = default) =>
+        await _hallRepository.GetByIdAsync(id, cancellationToken)
         ?? throw new NotFoundException($"Hall with id {id} was not found.");
 }

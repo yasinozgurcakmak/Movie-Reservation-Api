@@ -8,7 +8,7 @@ COPY ["DataAccessLayer/DataAccessLayer.csproj", "DataAccessLayer/"]
 COPY ["EntityLayer/EntityLayer.csproj", "EntityLayer/"]
 COPY ["DtoLayer/DtoLayer.csproj", "DtoLayer/"]
 
-RUN dotnet restore
+RUN dotnet restore MovieReservationAPI/MovieReservationAPI.csproj
 
 COPY . .
 WORKDIR "/src/MovieReservationAPI"
@@ -19,4 +19,5 @@ WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
 COPY --from=build /app/publish .
+USER $APP_UID
 ENTRYPOINT ["dotnet", "MovieReservationAPI.dll"]

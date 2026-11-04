@@ -11,6 +11,8 @@ namespace BusinessLayer.Concrete;
 
 public class TokenService : ITokenService
 {
+    public const string SecurityStampClaimType = "stamp";
+
     private readonly JwtSettings _settings;
 
     public TokenService(IOptions<JwtSettings> options)
@@ -32,7 +34,8 @@ public class TokenService : ITokenService
             {
                 [JwtRegisteredClaimNames.Sub] = user.Id.ToString(),
                 [JwtRegisteredClaimNames.Email] = user.Email,
-                ["role"] = user.Role.ToString()
+                ["role"] = user.Role.ToString(),
+                [SecurityStampClaimType] = user.SecurityStamp
             },
             SigningCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256)
         };

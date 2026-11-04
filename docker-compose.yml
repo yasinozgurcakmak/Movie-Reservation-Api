@@ -6,12 +6,26 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Bound to localhost only: reachable by local tools, not from the network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: movie_reservation_redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -26,13 +40,18 @@ services:
     ports:
       - "5000:8080"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password='${POSTGRES_PASSWORD}'
+      - ConnectionStrings__Redis=redis:6379,abortConnect=false,connectTimeout=1000
+      - Jwt__SecretKey=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}
+      - Admin__Password=${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in .env}
       - Email__Username=${SMTP_USERNAME}
       - Email__Password=${SMTP_PASSWORD}
       - Email__FromAddress=${SMTP_USERNAME}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - app-net

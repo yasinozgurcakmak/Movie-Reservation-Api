@@ -22,6 +22,7 @@ public class ReservationsController : ControllerBase
     [HttpPost]
     [ProducesResponseType<ReservationResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Create(ReservationRequest request)
     {
@@ -31,9 +32,9 @@ public class ReservationsController : ControllerBase
 
     [HttpGet("my")]
     [ProducesResponseType<List<ReservationResponse>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetMy()
+    public async Task<IActionResult> GetMy(CancellationToken cancellationToken)
     {
-        var reservations = await _reservationService.GetByUserIdAsync(User.GetUserId());
+        var reservations = await _reservationService.GetByUserIdAsync(User.GetUserId(), cancellationToken);
         return Ok(reservations);
     }
 

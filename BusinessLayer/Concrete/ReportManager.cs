@@ -45,17 +45,17 @@ public class ReportManager : IReportService
         _cinemaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZoneId);
     }
 
-    public async Task<AnalyticsResponse> GetAnalyticsAsync(AnalyticsQueryParameters query)
+    public async Task<AnalyticsResponse> GetAnalyticsAsync(AnalyticsQueryParameters query, CancellationToken cancellationToken = default)
     {
         await _analyticsValidator.ValidateAndThrowAsync(query);
 
         var cacheKey = $"reports:analytics:{query.From:yyyy-MM-dd}:{query.To:yyyy-MM-dd}:{query.Top}";
-        return await _cache.GetOrCreateAsync(cacheKey, CacheDuration, () => BuildAnalyticsAsync(query), _logger);
+        return await _cache.GetOrCreateAsync(cacheKey, CacheDuration, () => BuildAnalyticsAsync(query, cancellationToken), _logger);
     }
 
-    public async Task<byte[]> GetAnalyticsCsvAsync(AnalyticsQueryParameters query)
+    public async Task<byte[]> GetAnalyticsCsvAsync(AnalyticsQueryParameters query, CancellationToken cancellationToken = default)
     {
-        var analytics = await GetAnalyticsAsync(query);
+        var analytics = await GetAnalyticsAsync(query, cancellationToken);
 
         var csv = new StringBuilder();
         csv.AppendLine("ShowtimeId,StartTime,Movie,Hall,Capacity,SoldSeats,OccupancyRate,Revenue,CancelledSeats,LostRevenue");
@@ -77,22 +77,22 @@ public class ReportManager : IReportService
         return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(csv.ToString())];
     }
 
-    public async Task<SalesReportResponse> GetSalesAsync(SalesQueryParameters query)
+    public async Task<SalesReportResponse> GetSalesAsync(SalesQueryParameters query, CancellationToken cancellationToken = default)
     {
         await _salesValidator.ValidateAndThrowAsync(query);
 
         var interval = query.Interval.ToLowerInvariant();
         var cacheKey = $"reports:sales:{query.From:yyyy-MM-dd}:{query.To:yyyy-MM-dd}:{interval}";
-        return await _cache.GetOrCreateAsync(cacheKey, CacheDuration, () => BuildSalesAsync(query.From!.Value, query.To!.Value, interval), _logger);
+        return await _cache.GetOrCreateAsync(cacheKey, CacheDuration, () => BuildSalesAsync(query.From!.Value, query.To!.Value, interval, cancellationToken), _logger);
     }
 
-    private async Task<AnalyticsResponse> BuildAnalyticsAsync(AnalyticsQueryParameters query)
+    private async Task<AnalyticsResponse> BuildAnalyticsAsync(AnalyticsQueryParameters query, CancellationToken cancellationToken)
     {
         DateTimeOffset? from = query.From.HasValue ? ToUtcStartOfDay(query.From.Value) : null;
         DateTimeOffset? to = query.To.HasValue ? ToUtcStartOfDay(query.To.Value.AddDays(1)) : null;
 
-        var showtimes = await _reportRepository.GetShowtimeSalesAsync(from, to);
-        var movieGenres = await _reportRepository.GetMovieGenresAsync(showtimes.Select(s => s.MovieId).Distinct().ToList());
+        var showtimes = await _reportRepository.GetShowtimeSalesAsync(from, to, cancellationToken);
+        var movieGenres = await _reportRepository.GetMovieGenresAsync(showtimes.Select(s => s.MovieId).Distinct().ToList(), cancellationToken);
 
         var movies = showtimes
             .GroupBy(s => new { s.MovieId, s.MovieTitle })
@@ -176,9 +176,9 @@ public class ReportManager : IReportService
             showtimeResponses.OrderBy(s => s.OccupancyRate).ThenBy(s => s.StartTime).Take(query.Top).ToList());
     }
 
-    private async Task<SalesReportResponse> BuildSalesAsync(DateOnly from, DateOnly to, string interval)
+    private async Task<SalesReportResponse> BuildSalesAsync(DateOnly from, DateOnly to, string interval, CancellationToken cancellationToken)
     {
-        var sales = await _reportRepository.GetConfirmedSalesAsync(ToUtcStartOfDay(from), ToUtcStartOfDay(to.AddDays(1)));
+        var sales = await _reportRepository.GetConfirmedSalesAsync(ToUtcStartOfDay(from), ToUtcStartOfDay(to.AddDays(1)), cancellationToken);
 
         DateOnly PeriodStart(DateOnly date) =>
             interval == "week" ? date.AddDays(-(((int)date.DayOfWeek + 6) % 7)) : date;
@@ -230,7 +230,7 @@ public class ReportManager : IReportService
 
     private static string EscapeCsv(string value)
     {
-        if (value.Length > 0 && "=+-@".Contains(value[0])) value = "'" + value;
+        if (value.Length > 0 && "=+-@\t\r".Contains(value[0])) value = "'" + value;
         return value.IndexOfAny([',', '"', '\n', '\r']) >= 0 ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
     }
 }

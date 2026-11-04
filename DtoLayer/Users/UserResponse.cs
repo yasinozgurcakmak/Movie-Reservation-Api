@@ -5,6 +5,7 @@ public record UserResponse(
     string FirstName,
     string LastName,
     string Email,
+    bool EmailConfirmed,
     string? ProfilePictureUrl,
     string Role,
     DateTimeOffset CreatedAt);

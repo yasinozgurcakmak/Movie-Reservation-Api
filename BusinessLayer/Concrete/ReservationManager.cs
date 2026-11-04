@@ -1,13 +1,16 @@
+using System.Net;
 using BusinessLayer.Common;
 using BusinessLayer.Exceptions;
 using BusinessLayer.Interfaces;
 using BusinessLayer.Mappings;
+using BusinessLayer.Options;
 using DataAccessLayer.Repositories.Interfaces;
 using DtoLayer.Common;
 using DtoLayer.Reservations;
 using EntityLayer.Entities;
 using EntityLayer.Enums;
 using FluentValidation;
+using Microsoft.Extensions.Options;
 
 namespace BusinessLayer.Concrete;
 
@@ -15,31 +18,40 @@ public class ReservationManager : IReservationService
 {
     private readonly IReservationRepository _reservationRepository;
     private readonly IShowtimeRepository _showtimeRepository;
+    private readonly IUserRepository _userRepository;
+    private readonly IEmailQueue _emailQueue;
     private readonly IValidator<ReservationRequest> _reservationValidator;
     private readonly IValidator<ReservationStatusRequest> _statusValidator;
     private readonly IValidator<ReservationQueryParameters> _queryValidator;
+    private readonly TimeZoneInfo _cinemaTimeZone;
 
     public ReservationManager(
         IReservationRepository reservationRepository,
         IShowtimeRepository showtimeRepository,
+        IUserRepository userRepository,
+        IEmailQueue emailQueue,
         IValidator<ReservationRequest> reservationValidator,
         IValidator<ReservationStatusRequest> statusValidator,
-        IValidator<ReservationQueryParameters> queryValidator)
+        IValidator<ReservationQueryParameters> queryValidator,
+        IOptions<CinemaSettings> options)
     {
         _reservationRepository = reservationRepository;
         _showtimeRepository = showtimeRepository;
+        _userRepository = userRepository;
+        _emailQueue = emailQueue;
         _reservationValidator = reservationValidator;
         _statusValidator = statusValidator;
         _queryValidator = queryValidator;
+        _cinemaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZoneId);
     }
 
-    public async Task<PagedResponse<AdminReservationResponse>> GetPagedAsync(ReservationQueryParameters query)
+    public async Task<PagedResponse<AdminReservationResponse>> GetPagedAsync(ReservationQueryParameters query, CancellationToken cancellationToken = default)
     {
         await _queryValidator.ValidateAndThrowAsync(query);
 
         ReservationStatus? status = query.Status is null ? null : Enum.Parse<ReservationStatus>(query.Status, ignoreCase: true);
         var (reservations, totalCount) = await _reservationRepository.GetPagedAsync(
-            status, query.ShowtimeId, query.UserId, query.Email, query.Page, query.PageSize);
+            status, query.ShowtimeId, query.UserId, query.Email, query.Page, query.PageSize, cancellationToken);
         var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
 
         return new PagedResponse<AdminReservationResponse>(
@@ -50,9 +62,9 @@ public class ReservationManager : IReservationService
             totalPages);
     }
 
-    public async Task<List<ReservationResponse>> GetByUserIdAsync(int userId)
+    public async Task<List<ReservationResponse>> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default)
     {
-        var reservations = await _reservationRepository.GetByUserIdAsync(userId);
+        var reservations = await _reservationRepository.GetByUserIdAsync(userId, cancellationToken);
         return reservations.Select(r => r.ToResponse()).ToList();
     }
 
@@ -80,6 +92,12 @@ public class ReservationManager : IReservationService
     {
         await _reservationValidator.ValidateAndThrowAsync(request);
 
+        var user = await _userRepository.GetByIdAsync(userId)
+            ?? throw new NotFoundException($"User with id {userId} was not found.");
+
+        if (!user.EmailConfirmed)
+            throw new ForbiddenException("Please verify your email address before making a reservation.");
+
         var showtime = await _showtimeRepository.GetByIdAsync(request.ShowtimeId)
             ?? throw new BadRequestException($"Showtime with id {request.ShowtimeId} was not found.");
 
@@ -91,6 +109,11 @@ public class ReservationManager : IReservationService
         var invalidSeats = seatCodes.Where(c => !SeatLayout.Exists(showtime.Hall, c)).ToList();
         if (invalidSeats.Count > 0)
             throw new BadRequestException($"Seats do not exist in hall '{showtime.Hall.Name}': {string.Join(", ", invalidSeats)}.");
+
+        var seatsAlreadyHeld = await _reservationRepository.CountActiveSeatsAsync(showtime.Id, userId);
+        if (seatsAlreadyHeld + seatCodes.Count > ReservationLimits.MaxSeatsPerUserPerShowtime)
+            throw new BadRequestException(
+                $"At most {ReservationLimits.MaxSeatsPerUserPerShowtime} seats can be reserved per showtime; you already hold {seatsAlreadyHeld}.");
 
         var reservedSeats = await _reservationRepository.GetReservedSeatCodesAsync(showtime.Id);
         var takenSeats = seatCodes.Intersect(reservedSeats).ToList();
@@ -109,6 +132,19 @@ public class ReservationManager : IReservationService
 
         await _reservationRepository.AddAsync(reservation);
         await _reservationRepository.SaveChangesAsync();
+
+        var localStart = TimeZoneInfo.ConvertTime(showtime.StartTime, _cinemaTimeZone);
+        var body = $"""
+            <p>Merhaba, {WebUtility.HtmlEncode(user.FirstName)},</p>
+            <p>Rezervasyonunuz onaylandı.</p>
+            <p>Film: {WebUtility.HtmlEncode(showtime.Movie.Title)}<br>
+            Salon: {WebUtility.HtmlEncode(showtime.Hall.Name)}<br>
+            Seans: {localStart:dd.MM.yyyy HH:mm}<br>
+            Koltuklar: {string.Join(", ", seatCodes)}<br>
+            Toplam: {reservation.TotalAmount:0.00} TL<br>
+            Rezervasyon no: {reservation.Id}</p>
+            """;
+        _emailQueue.Enqueue(new EmailMessage(user.Email, "Your reservation is confirmed", body));
 
         return new ReservationResponse(
             reservation.Id,

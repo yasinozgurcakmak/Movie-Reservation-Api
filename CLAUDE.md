@@ -57,7 +57,6 @@ For multi-step tasks, state a brief plan:
 [Step] → verify: [check]
 [Step] → verify: [check]
 
-
 ## 5. .NET Core & Web API Standards
 
 When developing or modifying backend code in this project, strictly follow these architectural and coding standards:
@@ -95,7 +94,6 @@ Always return semantically correct status codes:
 - **Swagger / OpenAPI:** Keep Swagger integration updated and active for all API endpoints.
 - **API Versioning:** Plan and implement URL, Query String, or Header-based versioning (`v1`, `v2`) if breaking changes are anticipated.
 
-
 ### G. N-Tier Project Structure & PostgreSQL Rules
 - **Strict 5-Layer Architecture:**
   1. `EntityLayer`: Pure domain entities and enums only. Zero external package dependencies.
@@ -105,3 +103,37 @@ Always return semantically correct status codes:
   5. `MovieReservationAPI`: Thin controllers, Global `IExceptionHandler`, JWT configuration, DI extensions, and Swagger setup.
 - **PostgreSQL Conventions:** Always use `DateTimeOffset` or UTC `DateTime` (`timestamp with time zone`). Configure constraints, indexes, and relationships explicitly using Fluent API (`IEntityTypeConfiguration`), never data annotations on entities.
 - **Deferred Features:** Do NOT add Redis caching or API Versioning unless explicitly asked in the current step's prompt.
+
+---
+
+## 6. Security Audit Mode (Read-Only Inspection)
+
+**Activate this mode ONLY when the user explicitly asks to "review", "audit", "scan for vulnerabilities", or "find security issues". This mode is strictly read-only — do NOT edit code, refactor, or apply fixes. Report only. If the user then asks for fixes, switch back to Section 3 (Surgical Changes).**
+
+Adopt the mindset of a senior .NET security auditor. Treat all external input as hostile. Apply defense-in-depth.
+
+### Priority Checklist (report every finding with file:line evidence)
+
+**Injection & Input**
+- **SQL Injection:** String concatenation or interpolation in queries? Flag any `FromSqlRaw` / `ExecuteSqlRaw` with concatenated input. Enforce EF Core or parameterized queries.
+- **Command Injection:** `Process.Start` or shell calls with unvalidated user input.
+- **Path Traversal:** User-controlled file paths must be validated with `Path.GetFullPath` + root-prefix check.
+
+**Serialization & Secrets**
+- **Insecure Deserialization:** `BinaryFormatter`, `TypeNameHandling.All` / `TypeNameHandling.Auto` without `SerializationBinder`.
+- **Hard-coded Secrets:** API keys, connection strings, JWT signing keys in source or `appsettings.json` committed to repo. Flag them; recommend user-secrets / environment variables / Azure Key Vault.
+
+**Web Layer**
+- **CSRF:** Missing `[ValidateAntiForgeryToken]` on state-changing endpoints (note: N/A for pure JWT Bearer APIs, but flag cookie-based auth).
+- **XSS:** Un-encoded Razor output (`@Html.Raw`), missing input sanitization on rich-text fields.
+- **CORS:** Wildcard `AllowAnyOrigin()` combined with `AllowCredentials()`.
+- **AuthN/AuthZ:** Missing `[Authorize]` on protected controllers; role/claim checks missing on admin endpoints; IDOR (Insecure Direct Object Reference) — queries that fetch by `id` without checking ownership/tenant.
+
+### .NET Core-Specific Checks
+- **Async Pitfalls:** `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`; `async void` (except event handlers); missing `CancellationToken` propagation.
+- **EF Core:** N+1 queries (lazy loading in loops); missing `AsNoTracking()` on read-only queries; over-fetching (missing `Select` projection); raw SQL bypassing parameterization.
+- **DI & Lifetime:** Services instantiated with `new` instead of injected; captive dependency (singleton holding scoped); `HttpClient` created with `new` instead of `IHttpClientFactory`.
+- **Nullable Reference Types:** Suppression with `!` operator that hides real null risks.
+- **Package Vulnerabilities:** Recommend running `dotnet list package --vulnerable --include-transitive` and review the output if provided.
+
+### Output Format for Audit

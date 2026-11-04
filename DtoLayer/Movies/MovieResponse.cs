@@ -10,4 +10,5 @@ public record MovieResponse(
     int DurationMinutes,
     DateOnly ReleaseDate,
     List<GenreResponse> Genres,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    uint Version);

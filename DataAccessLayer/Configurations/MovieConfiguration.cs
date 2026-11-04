@@ -17,6 +17,7 @@ public class MovieConfiguration : IEntityTypeConfiguration<Movie>
         builder.Property(m => m.ReleaseDate).IsRequired();
         builder.Property(m => m.CreatedAt).IsRequired().HasDefaultValueSql("now()");
         builder.Property(m => m.IsDeleted).IsRequired().HasDefaultValue(false);
+        builder.Property(m => m.Version).IsRowVersion();
         builder.HasQueryFilter(m => !m.IsDeleted);
         builder.HasMany(m => m.Genres).WithMany().UsingEntity(
             "MovieGenres",

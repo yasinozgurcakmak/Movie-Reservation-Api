@@ -16,5 +16,6 @@ public static class MovieMappings
         movie.DurationMinutes,
         movie.ReleaseDate,
         movie.Genres.OrderBy(g => g.Name).Select(g => g.ToResponse()).ToList(),
-        movie.CreatedAt);
+        movie.CreatedAt,
+        movie.Version);
 }

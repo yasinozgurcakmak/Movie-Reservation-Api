@@ -11,6 +11,7 @@ public class Movie
     public DateTimeOffset CreatedAt { get; set; }
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
+    public uint Version { get; set; }
 
     public List<Genre> Genres { get; set; } = new();
 }

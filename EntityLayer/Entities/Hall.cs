@@ -6,4 +6,5 @@ public class Hall
     public string Name { get; set; } = null!;
     public int RowCount { get; set; }
     public int SeatsPerRow { get; set; }
+    public uint Version { get; set; }
 }

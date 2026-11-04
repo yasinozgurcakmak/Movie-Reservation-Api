@@ -17,9 +17,10 @@ public class ReportRepository : IReportRepository
 
     // Aggregation runs in PostgreSQL; only one summary row per showtime is returned.
     // Soft-deleted movies are included because their sales still happened.
-    public Task<List<ShowtimeSalesSummary>> GetShowtimeSalesAsync(DateTimeOffset? from, DateTimeOffset? to)
+    // Showtimes cancelled by the cinema are excluded: their seats were never sold, so they would skew occupancy.
+    public Task<List<ShowtimeSalesSummary>> GetShowtimeSalesAsync(DateTimeOffset? from, DateTimeOffset? to, CancellationToken cancellationToken = default)
     {
-        var showtimes = _context.Showtimes.IgnoreQueryFilters();
+        var showtimes = _context.Showtimes.IgnoreQueryFilters().Where(s => !s.IsCancelled);
         if (from.HasValue) showtimes = showtimes.Where(s => s.StartTime >= from.Value);
         if (to.HasValue) showtimes = showtimes.Where(s => s.StartTime < to.Value);
 
@@ -41,18 +42,18 @@ public class ReportRepository : IReportRepository
                 _context.Reservations
                     .Where(r => r.ShowtimeId == s.Id && r.Status == ReservationStatus.Cancelled)
                     .Sum(r => (decimal?)r.TotalAmount) ?? 0))
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
     }
 
-    public Task<List<MovieGenrePair>> GetMovieGenresAsync(IEnumerable<int> movieIds) =>
+    public Task<List<MovieGenrePair>> GetMovieGenresAsync(IEnumerable<int> movieIds, CancellationToken cancellationToken = default) =>
         _context.Movies.IgnoreQueryFilters()
             .Where(m => movieIds.Contains(m.Id))
             .SelectMany(m => m.Genres.Select(g => new MovieGenrePair(m.Id, g.Id, g.Name)))
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
-    public Task<List<ReservationSale>> GetConfirmedSalesAsync(DateTimeOffset from, DateTimeOffset to) =>
+    public Task<List<ReservationSale>> GetConfirmedSalesAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default) =>
         _context.Reservations
             .Where(r => r.Status == ReservationStatus.Confirmed && r.CreatedAt >= from && r.CreatedAt < to)
             .Select(r => new ReservationSale(r.CreatedAt, r.Seats.Count, r.TotalAmount))
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 }

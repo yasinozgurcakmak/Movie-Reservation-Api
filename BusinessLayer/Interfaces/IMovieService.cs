@@ -5,8 +5,8 @@ namespace BusinessLayer.Interfaces;
 
 public interface IMovieService
 {
-    Task<PagedResponse<MovieResponse>> GetPagedAsync(MovieQueryParameters query);
-    Task<MovieResponse> GetByIdAsync(int id);
+    Task<PagedResponse<MovieResponse>> GetPagedAsync(MovieQueryParameters query, CancellationToken cancellationToken = default);
+    Task<MovieResponse> GetByIdAsync(int id, CancellationToken cancellationToken = default);
     Task<MovieResponse> CreateAsync(MovieRequest request);
     Task<MovieResponse> UpdateAsync(int id, MovieRequest request);
     Task DeleteAsync(int id);

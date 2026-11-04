@@ -35,17 +35,17 @@ public class MovieManager : IMovieService
         _catalogCache = catalogCache;
     }
 
-    public async Task<PagedResponse<MovieResponse>> GetPagedAsync(MovieQueryParameters query)
+    public async Task<PagedResponse<MovieResponse>> GetPagedAsync(MovieQueryParameters query, CancellationToken cancellationToken = default)
     {
         await _queryValidator.ValidateAndThrowAsync(query);
 
         var cacheKey = $"movies:genre:{query.GenreId?.ToString() ?? "all"}:page:{query.Page}:size:{query.PageSize}";
-        return await _catalogCache.GetOrCreateAsync(cacheKey, () => BuildPageAsync(query));
+        return await _catalogCache.GetOrCreateAsync(cacheKey, () => BuildPageAsync(query, cancellationToken));
     }
 
-    private async Task<PagedResponse<MovieResponse>> BuildPageAsync(MovieQueryParameters query)
+    private async Task<PagedResponse<MovieResponse>> BuildPageAsync(MovieQueryParameters query, CancellationToken cancellationToken)
     {
-        var (movies, totalCount) = await _movieRepository.GetPagedAsync(query.GenreId, query.Page, query.PageSize);
+        var (movies, totalCount) = await _movieRepository.GetPagedAsync(query.GenreId, query.Page, query.PageSize, cancellationToken);
         var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
 
         return new PagedResponse<MovieResponse>(
@@ -56,9 +56,9 @@ public class MovieManager : IMovieService
             totalPages);
     }
 
-    public async Task<MovieResponse> GetByIdAsync(int id)
+    public async Task<MovieResponse> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        var movie = await GetExistingMovieAsync(id);
+        var movie = await GetExistingMovieAsync(id, cancellationToken);
         return movie.ToResponse();
     }
 
@@ -81,6 +81,9 @@ public class MovieManager : IMovieService
         await _movieValidator.ValidateAndThrowAsync(request);
 
         var movie = await GetExistingMovieAsync(id);
+        if (request.Version is not null && request.Version != movie.Version)
+            throw new ConflictException($"Movie with id {id} was modified by someone else. Reload it and try again.");
+
         await ApplyRequestAsync(movie, request);
 
         await _movieRepository.SaveChangesAsync();
@@ -92,6 +95,8 @@ public class MovieManager : IMovieService
     public async Task DeleteAsync(int id)
     {
         var movie = await GetExistingMovieAsync(id);
+        await EnsureNoUpcomingReservationsAsync(id);
+
         movie.IsDeleted = true;
         movie.DeletedAt = DateTimeOffset.UtcNow;
         await _movieRepository.SaveChangesAsync();
@@ -108,6 +113,8 @@ public class MovieManager : IMovieService
         var isDeleted = request.IsDeleted!.Value;
         if (movie.IsDeleted == isDeleted)
             throw new ConflictException($"Movie with id {id} is already {(isDeleted ? "deleted" : "active")}.");
+
+        if (isDeleted) await EnsureNoUpcomingReservationsAsync(id);
 
         movie.IsDeleted = isDeleted;
         movie.DeletedAt = isDeleted ? DateTimeOffset.UtcNow : null;
@@ -134,7 +141,14 @@ public class MovieManager : IMovieService
         movie.Genres.AddRange(genres);
     }
 
-    private async Task<Movie> GetExistingMovieAsync(int id) =>
-        await _movieRepository.GetByIdAsync(id)
+    // A deleted movie hides its showtimes, which would strand the tickets already sold for them.
+    private async Task EnsureNoUpcomingReservationsAsync(int id)
+    {
+        if (await _movieRepository.HasUpcomingReservationsAsync(id, DateTimeOffset.UtcNow))
+            throw new ConflictException($"Movie with id {id} has upcoming showtimes with reservations. Cancel those showtimes first.");
+    }
+
+    private async Task<Movie> GetExistingMovieAsync(int id, CancellationToken cancellationToken = default) =>
+        await _movieRepository.GetByIdAsync(id, cancellationToken)
         ?? throw new NotFoundException($"Movie with id {id} was not found.");
 }

@@ -14,9 +14,11 @@ public class GenreRepository : IGenreRepository
         _context = context;
     }
 
-    public Task<List<Genre>> GetAllAsync() => _context.Genres.AsNoTracking().OrderBy(g => g.Name).ToListAsync();
+    public Task<List<Genre>> GetAllAsync(CancellationToken cancellationToken = default) =>
+        _context.Genres.AsNoTracking().OrderBy(g => g.Name).ToListAsync(cancellationToken);
     public Task<List<Genre>> GetByIdsAsync(IEnumerable<int> ids) => _context.Genres.Where(g => ids.Contains(g.Id)).ToListAsync();
-    public Task<Genre?> GetByIdAsync(int id) => _context.Genres.FirstOrDefaultAsync(g => g.Id == id);
+    public Task<Genre?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
+        _context.Genres.FirstOrDefaultAsync(g => g.Id == id, cancellationToken);
     public Task<bool> NameExistsAsync(string name, int? excludeId = null) =>
         _context.Genres.AnyAsync(g => g.Name.ToLower() == name.ToLower() && g.Id != excludeId);
     public Task<int> CountMoviesUsingAsync(int id) =>

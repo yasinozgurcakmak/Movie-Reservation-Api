@@ -1,3 +1,4 @@
+using System.Net;
 using BusinessLayer.Common;
 using BusinessLayer.Exceptions;
 using BusinessLayer.Interfaces;
@@ -6,6 +7,7 @@ using BusinessLayer.Options;
 using DataAccessLayer.Repositories.Interfaces;
 using DtoLayer.Showtimes;
 using EntityLayer.Entities;
+using EntityLayer.Enums;
 using FluentValidation;
 using Microsoft.Extensions.Options;
 
@@ -20,6 +22,7 @@ public class ShowtimeManager : IShowtimeService
     private readonly IValidator<ShowtimeRequest> _showtimeValidator;
     private readonly IValidator<ShowtimeQueryParameters> _queryValidator;
     private readonly CatalogCache _catalogCache;
+    private readonly IEmailQueue _emailQueue;
     private readonly TimeZoneInfo _cinemaTimeZone;
 
     public ShowtimeManager(
@@ -30,6 +33,7 @@ public class ShowtimeManager : IShowtimeService
         IValidator<ShowtimeRequest> showtimeValidator,
         IValidator<ShowtimeQueryParameters> queryValidator,
         CatalogCache catalogCache,
+        IEmailQueue emailQueue,
         IOptions<CinemaSettings> options)
     {
         _showtimeRepository = showtimeRepository;
@@ -39,24 +43,25 @@ public class ShowtimeManager : IShowtimeService
         _showtimeValidator = showtimeValidator;
         _queryValidator = queryValidator;
         _catalogCache = catalogCache;
+        _emailQueue = emailQueue;
         _cinemaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Value.TimeZoneId);
     }
 
-    public async Task<List<MovieShowtimesResponse>> GetByDateAsync(ShowtimeQueryParameters query)
+    public async Task<List<MovieShowtimesResponse>> GetByDateAsync(ShowtimeQueryParameters query, CancellationToken cancellationToken = default)
     {
         await _queryValidator.ValidateAndThrowAsync(query);
 
         var date = query.Date!.Value;
-        return await _catalogCache.GetOrCreateAsync($"showtimes:date:{date:yyyy-MM-dd}", () => BuildDailyListingAsync(date));
+        return await _catalogCache.GetOrCreateAsync($"showtimes:date:{date:yyyy-MM-dd}", () => BuildDailyListingAsync(date, cancellationToken));
     }
 
-    private async Task<List<MovieShowtimesResponse>> BuildDailyListingAsync(DateOnly date)
+    private async Task<List<MovieShowtimesResponse>> BuildDailyListingAsync(DateOnly date, CancellationToken cancellationToken)
     {
         var localDayStart = date.ToDateTime(TimeOnly.MinValue);
         var from = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localDayStart, _cinemaTimeZone));
         var to = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(localDayStart.AddDays(1), _cinemaTimeZone));
 
-        var showtimes = await _showtimeRepository.GetByStartTimeRangeAsync(from, to);
+        var showtimes = await _showtimeRepository.GetByStartTimeRangeAsync(from, to, cancellationToken);
 
         return showtimes
             .GroupBy(s => s.MovieId)
@@ -74,19 +79,19 @@ public class ShowtimeManager : IShowtimeService
             .ToList();
     }
 
-    public async Task<ShowtimeResponse> GetByIdAsync(int id)
+    public async Task<ShowtimeResponse> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        var showtime = await _showtimeRepository.GetByIdAsync(id)
+        var showtime = await _showtimeRepository.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Showtime with id {id} was not found.");
         return showtime.ToResponse();
     }
 
-    public async Task<SeatMapResponse> GetSeatMapAsync(int id)
+    public async Task<SeatMapResponse> GetSeatMapAsync(int id, CancellationToken cancellationToken = default)
     {
-        var showtime = await _showtimeRepository.GetByIdAsync(id)
+        var showtime = await _showtimeRepository.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Showtime with id {id} was not found.");
         var hall = showtime.Hall;
-        var reservedSeats = (await _reservationRepository.GetReservedSeatCodesAsync(id)).ToHashSet();
+        var reservedSeats = (await _reservationRepository.GetReservedSeatCodesAsync(id, cancellationToken)).ToHashSet();
 
         var rows = Enumerable.Range(0, hall.RowCount)
             .Select(rowIndex =>
@@ -107,6 +112,74 @@ public class ShowtimeManager : IShowtimeService
     {
         await _showtimeValidator.ValidateAndThrowAsync(request);
 
+        var showtime = new Showtime { CreatedAt = DateTimeOffset.UtcNow };
+        await ApplyRequestAsync(showtime, request);
+
+        await _showtimeRepository.AddAsync(showtime);
+        await _showtimeRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
+
+        return showtime.ToResponse();
+    }
+
+    public async Task<ShowtimeResponse> UpdateAsync(int id, ShowtimeRequest request)
+    {
+        await _showtimeValidator.ValidateAndThrowAsync(request);
+
+        var showtime = await GetUpcomingShowtimeAsync(id, "changed");
+
+        // Sold tickets name the hall, time and price, so they cannot change under the customer.
+        if (await _reservationRepository.HasActiveReservationsAsync(id))
+            throw new ConflictException($"Showtime with id {id} has reservations and cannot be changed. Cancel it and create a new one instead.");
+
+        await ApplyRequestAsync(showtime, request);
+
+        await _showtimeRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
+
+        return showtime.ToResponse();
+    }
+
+    public async Task CancelAsync(int id)
+    {
+        var showtime = await GetUpcomingShowtimeAsync(id, "cancelled");
+        var reservations = await _reservationRepository.GetActiveByShowtimeIdAsync(id);
+
+        foreach (var reservation in reservations)
+        {
+            reservation.Status = ReservationStatus.Cancelled;
+            reservation.Seats.ForEach(s => s.IsCancelled = true);
+        }
+
+        showtime.IsCancelled = true;
+        await _showtimeRepository.SaveChangesAsync();
+        await _catalogCache.InvalidateAsync();
+
+        var localStart = TimeZoneInfo.ConvertTime(showtime.StartTime, _cinemaTimeZone);
+        foreach (var reservation in reservations)
+        {
+            var body = $"""
+                <p>Merhaba, {WebUtility.HtmlEncode(reservation.User.FirstName)},</p>
+                <p>{WebUtility.HtmlEncode(showtime.Movie.Title)} filminin {localStart:dd.MM.yyyy HH:mm} seansı iptal edildi.</p>
+                <p>{string.Join(", ", reservation.Seats.Select(s => s.SeatCode))} numaralı koltuklar için yaptığınız rezervasyon iptal edilmiştir.</p>
+                """;
+            _emailQueue.Enqueue(new EmailMessage(reservation.User.Email, "Your showtime has been cancelled", body));
+        }
+    }
+
+    private async Task<Showtime> GetUpcomingShowtimeAsync(int id, string action)
+    {
+        var showtime = await _showtimeRepository.GetByIdForUpdateAsync(id)
+            ?? throw new NotFoundException($"Showtime with id {id} was not found.");
+
+        if (showtime.StartTime <= DateTimeOffset.UtcNow)
+            throw new BadRequestException($"Showtimes that have already started cannot be {action}.");
+
+        return showtime;
+    }
+
+    private async Task ApplyRequestAsync(Showtime showtime, ShowtimeRequest request)
+    {
         var movie = await _movieRepository.GetByIdAsync(request.MovieId)
             ?? throw new BadRequestException($"Movie with id {request.MovieId} was not found.");
         var hall = await _hallRepository.GetByIdAsync(request.HallId)
@@ -115,24 +188,14 @@ public class ShowtimeManager : IShowtimeService
         var startTime = request.StartTime.ToUniversalTime();
         var endTime = startTime.AddMinutes(movie.DurationMinutes);
 
-        if (await _showtimeRepository.HasOverlapAsync(hall.Id, startTime, endTime))
+        int? excludeId = showtime.Id == 0 ? null : showtime.Id;
+        if (await _showtimeRepository.HasOverlapAsync(hall.Id, startTime, endTime, excludeId))
             throw new ConflictException($"Hall '{hall.Name}' already has a showtime overlapping {startTime:u} - {endTime:u}.");
 
-        var showtime = new Showtime
-        {
-            Movie = movie,
-            Hall = hall,
-            StartTime = startTime,
-            EndTime = endTime,
-            TicketPrice = request.TicketPrice,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        await _showtimeRepository.AddAsync(showtime);
-        await _showtimeRepository.SaveChangesAsync();
-
-        await _catalogCache.InvalidateAsync();
-
-        return showtime.ToResponse();
+        showtime.Movie = movie;
+        showtime.Hall = hall;
+        showtime.StartTime = startTime;
+        showtime.EndTime = endTime;
+        showtime.TicketPrice = request.TicketPrice;
     }
 }

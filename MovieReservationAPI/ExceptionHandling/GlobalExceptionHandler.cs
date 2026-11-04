@@ -21,6 +21,13 @@ public class GlobalExceptionHandler : IExceptionHandler
 
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
+        // The client disconnected and its request was cancelled; nobody is waiting for a response.
+        if (exception is OperationCanceledException && httpContext.RequestAborted.IsCancellationRequested)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
+            return true;
+        }
+
         var (statusCode, title) = exception switch
         {
             ValidationException => (StatusCodes.Status400BadRequest, "Validation Failed"),
@@ -29,8 +36,7 @@ public class GlobalExceptionHandler : IExceptionHandler
             ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
             NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
-            DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } }
-                => (StatusCodes.Status409Conflict, "Conflict"),
+            _ when IsConcurrentWriteConflict(exception) => (StatusCodes.Status409Conflict, "Conflict"),
             _ => (StatusCodes.Status500InternalServerError, "Internal Server Error")
         };
 
@@ -67,9 +73,24 @@ public class GlobalExceptionHandler : IExceptionHandler
         if (statusCode == StatusCodes.Status500InternalServerError)
             return _environment.IsDevelopment() ? exception.Message : "An unexpected error occurred.";
 
-        if (exception is DbUpdateException)
+        if (IsConcurrentWriteConflict(exception))
             return "The request conflicts with data that was saved at the same time. Please refresh and try again.";
 
         return exception.Message;
+    }
+
+    // Another request saved conflicting data first. Concurrent inserts checked by an exclusion constraint can also
+    // deadlock; Npgsql reports that as a transient error wrapped in an InvalidOperationException.
+    private static bool IsConcurrentWriteConflict(Exception exception)
+    {
+        if (exception is DbUpdateConcurrencyException) return true;
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ExclusionViolation or PostgresErrorCodes.DeadlockDetected })
+                return true;
+        }
+
+        return false;
     }
 }

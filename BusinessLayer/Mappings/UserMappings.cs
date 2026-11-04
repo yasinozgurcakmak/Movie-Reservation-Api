@@ -10,6 +10,7 @@ public static class UserMappings
         user.FirstName,
         user.LastName,
         user.Email,
+        user.EmailConfirmed,
         user.ProfilePictureUrl,
         user.Role.ToString(),
         user.CreatedAt);

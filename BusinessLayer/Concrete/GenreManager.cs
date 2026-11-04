@@ -22,16 +22,16 @@ public class GenreManager : IGenreService
         _catalogCache = catalogCache;
     }
 
-    public Task<List<GenreResponse>> GetAllAsync() =>
+    public Task<List<GenreResponse>> GetAllAsync(CancellationToken cancellationToken = default) =>
         _catalogCache.GetOrCreateAsync("genres", async () =>
         {
-            var genres = await _genreRepository.GetAllAsync();
+            var genres = await _genreRepository.GetAllAsync(cancellationToken);
             return genres.Select(g => g.ToResponse()).ToList();
         });
 
-    public async Task<GenreResponse> GetByIdAsync(int id)
+    public async Task<GenreResponse> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
-        var genre = await GetExistingGenreAsync(id);
+        var genre = await GetExistingGenreAsync(id, cancellationToken);
         return genre.ToResponse();
     }
 
@@ -84,7 +84,7 @@ public class GenreManager : IGenreService
             throw new ConflictException($"A genre with name '{name}' already exists.");
     }
 
-    private async Task<Genre> GetExistingGenreAsync(int id) =>
-        await _genreRepository.GetByIdAsync(id)
+    private async Task<Genre> GetExistingGenreAsync(int id, CancellationToken cancellationToken = default) =>
+        await _genreRepository.GetByIdAsync(id, cancellationToken)
         ?? throw new NotFoundException($"Genre with id {id} was not found.");
 }

@@ -10,5 +10,6 @@ public class Showtime
     public DateTimeOffset StartTime { get; set; }
     public DateTimeOffset EndTime { get; set; }
     public decimal TicketPrice { get; set; }
+    public bool IsCancelled { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }

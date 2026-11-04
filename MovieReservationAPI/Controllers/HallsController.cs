@@ -20,18 +20,18 @@ public class HallsController : ControllerBase
 
     [HttpGet]
     [ProducesResponseType<List<HallResponse>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var halls = await _hallService.GetAllAsync();
+        var halls = await _hallService.GetAllAsync(cancellationToken);
         return Ok(halls);
     }
 
     [HttpGet("{id:int}")]
     [ProducesResponseType<HallResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {
-        var hall = await _hallService.GetByIdAsync(id);
+        var hall = await _hallService.GetByIdAsync(id, cancellationToken);
         return Ok(hall);
     }
 

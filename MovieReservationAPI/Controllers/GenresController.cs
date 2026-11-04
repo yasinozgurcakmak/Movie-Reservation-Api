@@ -20,18 +20,18 @@ public class GenresController : ControllerBase
 
     [HttpGet]
     [ProducesResponseType<List<GenreResponse>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var genres = await _genreService.GetAllAsync();
+        var genres = await _genreService.GetAllAsync(cancellationToken);
         return Ok(genres);
     }
 
     [HttpGet("{id:int}")]
     [ProducesResponseType<GenreResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(int id)
+    public async Task<IActionResult> GetById(int id, CancellationToken cancellationToken)
     {
-        var genre = await _genreService.GetByIdAsync(id);
+        var genre = await _genreService.GetByIdAsync(id, cancellationToken);
         return Ok(genre);
     }
 

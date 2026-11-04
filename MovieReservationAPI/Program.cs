@@ -1,9 +1,14 @@
+using BusinessLayer.Options;
 using DataAccessLayer.Context;
+using DataAccessLayer.Seed;
+using Microsoft.Extensions.Options;
 using MovieReservationAPI.ExceptionHandling;
 using MovieReservationAPI.Extensions;
 using MovieReservationAPI.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -16,30 +21,47 @@ builder.Services.AddControllers();
 builder.Services.AddDataAccess(builder.Configuration);
 builder.Services.AddBusiness(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
+builder.Services.AddApiRateLimiting(builder.Configuration);
+builder.Services.AddApiHealthChecks();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 var app = builder.Build();
 
+await using (var scope = app.Services.CreateAsyncScope())
+{
+    var admin = scope.ServiceProvider.GetRequiredService<IOptions<AdminSettings>>().Value;
+    await DbInitializer.InitializeAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), admin.Email, admin.Password);
+}
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-
-
-if (app.Environment.IsDevelopment())
+app.Use(async (context, next) =>
 {
-    app.MapOpenApi();
-    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "MovieReservationAPI v1"));
-}
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    context.Response.Headers.XFrameOptions = "DENY";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    await next();
+});
+
+// Swagger is served in every environment so the API stays explorable after deployment (e.g. in Docker).
+app.MapOpenApi();
+app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "MovieReservationAPI v1"));
+
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapControllers();
-
-
+app.MapHealthChecks("/health");
 
 app.Run();
+
+public partial class Program;
