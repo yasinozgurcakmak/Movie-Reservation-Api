@@ -1,6 +1,7 @@
 using BusinessLayer.Options;
 using DataAccessLayer.Context;
 using DataAccessLayer.Seed;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 using MovieReservationAPI.ExceptionHandling;
 using MovieReservationAPI.Extensions;
@@ -35,6 +36,17 @@ await using (var scope = app.Services.CreateAsyncScope())
     await DbInitializer.InitializeAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), admin.Email, admin.Password);
 }
 
+// Behind a reverse proxy (e.g. Coolify/Traefik): trust X-Forwarded-* so scheme, client IP and prefix are correct.
+var forwardedOptions = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.All };
+forwardedOptions.KnownNetworks.Clear();
+forwardedOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedOptions);
+
+// Serve the app under a sub-path when PathBase is set (e.g. /movie-reservation-api).
+var pathBase = builder.Configuration["PathBase"];
+if (!string.IsNullOrEmpty(pathBase))
+    app.UsePathBase(pathBase);
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -48,7 +60,7 @@ app.Use(async (context, next) =>
 
 // Swagger is served in every environment so the API stays explorable after deployment (e.g. in Docker).
 app.MapOpenApi();
-app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "MovieReservationAPI v1"));
+app.UseSwaggerUI(options => options.SwaggerEndpoint("../openapi/v1.json", "MovieReservationAPI v1"));
 
 if (!app.Environment.IsDevelopment())
     app.UseHsts();
