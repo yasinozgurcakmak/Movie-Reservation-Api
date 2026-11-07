@@ -4,8 +4,46 @@ A REST API for managing movies, showtimes and seat reservations in a cinema. Bui
 
 It prevents the same seat from being sold twice and overlapping showtimes from being scheduled in the same hall at the database level. It also provides occupancy and revenue reports for administrators.
 
+## Live Demo
+
+| | URL |
+|---|---|
+| Swagger UI | https://demo.yasinozgurcakmak.com.tr/movie-reservation-api/swagger/index.html |
+| API base URL | https://demo.yasinozgurcakmak.com.tr/movie-reservation-api |
+
+
+Demo account:
+
+| Email | Password |
+|---|---|
+| `demouser@gmail.com` | `DemoUser0!` |
+
+**Try it in Swagger:**
+
+1. Open Swagger UI and expand `POST /api/auth/login`.
+2. Click **Try it out** and send:
+   ```json
+   {
+     "email": "demouser@gmail.com",
+     "password": "DemoUser0!"
+   }
+   ```
+3. Copy the `accessToken` from the response.
+4. Click **Authorize** at the top of the page, paste the token and confirm.
+5. You can now call the protected endpoints.
+
+**Or with curl:**
+
+```bash
+curl -X POST https://demo.yasinozgurcakmak.com.tr/movie-reservation-api/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demouser@gmail.com","password":"DemoUser0!"}'
+```
+
+
 ## Table of Contents
 
+- [Live Demo](#live-demo)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Architecture](#architecture)
